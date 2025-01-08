@@ -1,0 +1,19 @@
+.bg_grass {
+    background-color: green;
+}
+
+.bg_fire {
+    background-color: red;
+}
+
+.bg_water {
+    background-color: blue;
+}
+
+.bg_electric {
+    background-color: yellow;
+}
+
+.bg_default {
+    background-color: gray;
+}
