@@ -1,11 +1,10 @@
-/* Allgemeine Stile */
 body {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 0;
     background-color: #202020;
     color: #fff;
-    overflow-x: hidden; /* Keine horizontale Scrollleiste */
+    overflow-x: hidden;
 }
 
 header {
@@ -151,7 +150,12 @@ header {
     z-index: 999; /* Hinter der fokussierten Karte */
 }
 
-/* Lade-Animation */
+#pokemon-container {
+    max-width: 1920px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
 .hidden {
     display: none;
 }
@@ -162,5 +166,45 @@ header {
     }
     to {
         transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 530px) {
+    body {
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+    }
+
+    #pokemon-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 10px;
+    }
+
+    .pokemon-card {
+        width: 100%;
+        max-width: 220px;
+        padding: 10px;
+    }
+
+    .pokemon-card img {
+        width: 100%;
+        height: auto;
+    }
+
+    .pokemon-card h3 {
+        font-size: 1rem;
+    }
+
+    .pokemon-card p {
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 320px) {  
+    .pokemon-card {
+        max-width: 120px;
     }
 }
