@@ -19,20 +19,21 @@
     
     <main>
         <div id="loading-screen" class="hidden">
-            <div id="spinner"></div>
+            <img src="/assets/icon/pokeball_logo.png" alt="Loading..." />
+            <p>Loading...</p>
         </div>
         <section id="pokemon-container"></section>
         <div id="filter-container">
             <label for="filter">Pokémon-Anzahl:</label>
             <select id="filter">
-                <option value="10">10</option>
-                <option value="20" selected>20</option>
+                <option value="10" selected>10</option>
+                <option value="20" >20</option>
                 <option value="30">30</option>
                 <option value="40">40</option>
                 <option value="50">50</option>
             </select>
         </div>
-        <button id="load-more">Mehr laden</button>
+        <button id="load-more">Mehr Pokemon laden</button>
     </main>
     <footer>
         <p>&copy; KW - 2025 Pokedex</p>
