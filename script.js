@@ -1,242 +1,308 @@
-const apiUrl = 'https://pokeapi.co/api/v2/pokemon';
-let allPokemons = [];
-let currentOffset = 0;
-let limit = 10;
-let isLoading = false;
-let currentPokemonIndex = 0;
+const API_URL = 'https://pokeapi.co/api/v2/pokemon';
+const SEARCH_DEBOUNCE = 300;
+const SEARCH_LIMIT = 30;
 
-async function fetchAndStorePokemons(limit, offset) {
-    try {
-        const response = await fetch(`${apiUrl}?limit=${limit}&offset=${offset}`);
-        const data = await response.json();
-        const detailedPokemons = await Promise.all(
-            data.results.map(pokemon => fetchPokemonDetails(pokemon.url))
-        );
-        allPokemons = [...allPokemons, ...detailedPokemons];
-        return detailedPokemons;
-    } catch (error) {
-        return [];
-    }
+const state = {
+  loaded: [],
+  view: [],
+  offset: 0,
+  focusIndex: 0,
+  isLoading: false,
+  names: null,
+};
+
+/**
+ * Fetches JSON from a URL, or null on error.
+ * @param {string} url
+ * @returns {Promise<any>}
+ */
+async function fetchJson(url) {
+  try {
+    const response = await fetch(url);
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
 }
 
-async function fetchPokemonDetails(url) {
-    try {
-        const response = await fetch(url);
-        return await response.json();
-    } catch (error) {
-        return null;
-    }
+/**
+ * Loads a page of detailed Pokémon and appends them to the store.
+ * @param {number} limit
+ * @param {number} offset
+ * @returns {Promise<Array>}
+ */
+async function fetchPage(limit, offset) {
+  const data = await fetchJson(`${API_URL}?limit=${limit}&offset=${offset}`);
+  if (!data) return [];
+  const detailed = await Promise.all(data.results.map((p) => fetchJson(p.url)));
+  const clean = detailed.filter(Boolean);
+  state.loaded = [...state.loaded, ...clean];
+  return clean;
 }
 
-function generatePokemonCard(details) {
-    const pokemonType = details.types[0]?.type.name || 'default';
-    return `
-        <div class="pokemon-card bg_${pokemonType}" data-id="${details.id}">
-            <img src="${details.sprites.front_default}" alt="${details.name}">
-            <h3>${details.name}</h3>
-            <p>#${details.id}</p>
-        </div>
-    `;
+/**
+ * Returns the type name of a Pokémon, or "default".
+ * @param {object} pokemon
+ * @returns {string}
+ */
+function typeOf(pokemon) {
+  return pokemon.types[0]?.type.name || 'default';
 }
 
-function generateFocusedPokemonCard(pokemon) {
-    const pokemonType = pokemon.types[0]?.type.name || 'default';
-    return `
-        <div class="pokemon-card focused" style="background-color: ${getTypeColor(pokemonType)};">
-            <div class="card-header">
-                <h2>${pokemon.name}</h2>
-                <span>#${pokemon.id}</span>
-            </div>
-            <img src="${pokemon.sprites.other['official-artwork'].front_default}" alt="${pokemon.name}">
-            <div class="card-details">
-                <p><strong>Typ:</strong> ${pokemon.types.map(t => t.type.name).join(', ')}</p>
-                <p><strong>Höhe:</strong> ${(pokemon.height / 10).toFixed(1)} m</p>
-                <p><strong>Gewicht:</strong> ${(pokemon.weight / 10).toFixed(1)} kg</p>
-                <p><strong>Angriff:</strong> ${pokemon.stats.find(s => s.stat.name === 'attack').base_stat}</p>
-                <p><strong>Verteidigung:</strong> ${pokemon.stats.find(s => s.stat.name === 'defense').base_stat}</p>
-            </div>
-            <button class="close-btn" onclick="closeDetails()">X</button>
-            <button class="nav-btn prev-btn" onclick="navigatePokemon(-1)">⬅</button>
-            <button class="nav-btn next-btn" onclick="navigatePokemon(1)">➡</button>
-        </div>
-    `;
+/**
+ * Whether the visitor prefers reduced motion.
+ * @returns {boolean}
+ */
+function reducedMotion() {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function renderPokemons(pokemons) {
-    const container = document.getElementById('pokemon-container');
-    container.innerHTML = pokemons
-        .map(details => {
-            const pokemonType = details.types[0]?.type.name || 'default';
-            return `
-                <div class="pokemon-card bg_${pokemonType}" 
-                    data-id="${details.id}" 
-                    data-name="${details.name}" 
-                    data-image="${details.sprites.front_default}">
-                    <img src="${details.sprites.front_default}" alt="${details.name}">
-                    <h3>${details.name}</h3>
-                    <p>#${details.id}</p>
-                </div>
-            `;
-        })
-        .join('');
-    container.querySelectorAll('.pokemon-card').forEach(card => {
-        card.addEventListener('click', () => showPokemonDetails(card.dataset.id));
-    });
+/**
+ * Returns the animated sprite where available, else the static one.
+ * @param {object} p
+ * @returns {string}
+ */
+function spriteOf(p) {
+  const animated = p.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default;
+  return (animated && !reducedMotion()) ? animated : p.sprites.front_default;
 }
 
-function showPokemonDetails(id) {
-    if (isLoading) return;
-    isLoading = true;
-    const container = document.getElementById('pokemon-container');
-    currentPokemonIndex = allPokemons.findIndex(p => p.id === parseInt(id));
-    const pokemon = allPokemons[currentPokemonIndex];
-    if (!pokemon) {
-        isLoading = false;
-        return;
-    }
-    container.classList.add('show-overlay');
-    document.body.style.overflow = 'hidden';
-    const cards = container.querySelectorAll('.pokemon-card');
-    cards.forEach(card => {
-        card.classList.add('faded');
-    });
-    renderFocusedPokemon(pokemon);
-    isLoading = false;
+/**
+ * Builds the markup for one grid card.
+ * @param {object} p
+ * @returns {string}
+ */
+function cardMarkup(p) {
+  return `
+    <div class="pokemon-card bg_${typeOf(p)}" data-id="${p.id}">
+      <img class="pokemon-card__sprite" src="${spriteOf(p)}" alt="${p.name}">
+      <h3>${p.name}</h3>
+      <p>#${p.id}</p>
+    </div>`;
 }
 
-function renderFocusedPokemon(pokemon) {
-    const container = document.getElementById('pokemon-container');
-    const focusedCard = document.createElement('div');
-    focusedCard.innerHTML = generateFocusedPokemonCard(pokemon);
-    container.appendChild(focusedCard);
+/**
+ * Renders a set of Pokémon as the current view and wires card clicks.
+ * @param {Array} list
+ */
+function renderGrid(list) {
+  state.view = list;
+  const container = document.getElementById('pokemon-container');
+  if (!list.length) {
+    container.innerHTML = '<p class="empty">Keine Pokémon gefunden.</p>';
+    return;
+  }
+  container.innerHTML = list.map(cardMarkup).join('');
+  container.querySelectorAll('.pokemon-card').forEach((card) => {
+    card.addEventListener('click', () => openDetail(Number(card.dataset.id)));
+  });
 }
 
-function navigatePokemon(direction) {
-    currentPokemonIndex += direction;
-    if (currentPokemonIndex < 0) currentPokemonIndex = allPokemons.length - 1;
-    if (currentPokemonIndex >= allPokemons.length) currentPokemonIndex = 0;
-    const pokemon = allPokemons[currentPokemonIndex];
-    const focusedCard = document.querySelector('.pokemon-card.focused');
-    if (focusedCard) {
-        focusedCard.innerHTML = generateFocusedPokemonCard(pokemon);
-        focusedCard.style.backgroundColor = getTypeColor(pokemon.types[0]?.type.name || 'default');
-    }
+/**
+ * Builds one stat bar row.
+ * @param {object} p
+ * @param {string} key stat name in the API
+ * @param {string} label German label
+ * @returns {string}
+ */
+function statBar(p, key, label) {
+  const value = p.stats.find((s) => s.stat.name === key)?.base_stat ?? 0;
+  const percent = Math.min(100, Math.round((value / 180) * 100));
+  return `
+    <div class="stat">
+      <span class="stat__label">${label}</span>
+      <span class="stat__track"><span class="stat__fill" style="width:${percent}%"></span></span>
+      <span class="stat__value">${value}</span>
+    </div>`;
 }
 
-function closeDetails() {
-    const container = document.getElementById('pokemon-container');
-    container.classList.remove('show-overlay');
-    document.body.style.overflow = 'auto';
-    const focusedCard = container.querySelector('.pokemon-card.focused');
-    if (focusedCard) focusedCard.remove();
-    const cards = container.querySelectorAll('.pokemon-card');
-    cards.forEach(card => {
-        card.classList.remove('faded', 'focused');
-        card.style.backgroundColor = '';
-        card.innerHTML = `
-            <img src="${card.dataset.image}" alt="${card.dataset.name}">
-            <h3>${card.dataset.name}</h3>
-            <p>#${card.dataset.id}</p>
-        `;
-    });
+/**
+ * Builds the stat block of the detail card.
+ * @param {object} p
+ * @returns {string}
+ */
+function statsMarkup(p) {
+  return statBar(p, 'hp', 'KP') + statBar(p, 'attack', 'Angriff')
+    + statBar(p, 'defense', 'Verteidigung') + statBar(p, 'speed', 'Initiative');
 }
 
-function getTypeColor(type) {
-    const typeColors = {
-        grass: 'green',
-        fire: 'red',
-        water: 'blue',
-        electric: 'yellow',
-        bug: 'limegreen',
-        poison: 'purple',
-        normal: 'gray',
-        ground: 'brown',
-        fairy: 'pink',
-        fighting: 'darkred',
-        psychic: 'violet',
-        rock: 'darkgoldenrod',
-        ghost: 'indigo',
-        ice: 'lightblue',
-        dragon: 'orange',
-        steel: 'silver',
-        dark: 'black',
-        default: '#444'
-    };
-    return typeColors[type] || typeColors['default'];
+/**
+ * Returns the artwork URL, falling back to the default sprite.
+ * @param {object} p
+ * @returns {string}
+ */
+function artOf(p) {
+  return p.sprites.other['official-artwork'].front_default || p.sprites.front_default;
 }
 
-async function loadInitialPokemons() {
-    showLoadingSpinner();
-    const pokemons = await fetchAndStorePokemons(limit, currentOffset);
-    hideLoadingSpinner();
-    renderPokemons(pokemons);
+/**
+ * Builds the inner markup for the focused detail card.
+ * @param {object} p
+ * @returns {string}
+ */
+function focusedMarkup(p) {
+  return `
+    <div class="card-header"><h2>${p.name}</h2><span>#${p.id}</span></div>
+    <img class="focused__art" src="${artOf(p)}" alt="${p.name}">
+    <div class="card-details">
+      <p><strong>Typ:</strong> ${p.types.map((t) => t.type.name).join(', ')}</p>
+      <p><strong>Höhe:</strong> ${(p.height / 10).toFixed(1)} m,
+         <strong>Gewicht:</strong> ${(p.weight / 10).toFixed(1)} kg</p>
+      ${statsMarkup(p)}
+    </div>
+    <button class="close-btn" type="button" aria-label="Schließen">X</button>
+    <button class="nav-btn prev-btn" type="button" aria-label="Vorheriges">⬅</button>
+    <button class="nav-btn next-btn" type="button" aria-label="Nächstes">➡</button>`;
 }
 
-function showLoadingSpinner() {
-    const spinner = document.getElementById('loading-screen');
-    if (!spinner) return;
-    spinner.classList.remove('hidden');
+/**
+ * Fills the focused card element and wires its buttons.
+ * @param {object} p
+ */
+function fillFocused(p) {
+  const card = document.querySelector('.pokemon-card.focused');
+  card.className = `pokemon-card focused bg_${typeOf(p)}`;
+  card.innerHTML = focusedMarkup(p);
+  card.querySelector('.close-btn').addEventListener('click', closeDetail);
+  card.querySelector('.prev-btn').addEventListener('click', () => navigate(-1));
+  card.querySelector('.next-btn').addEventListener('click', () => navigate(1));
 }
 
-function hideLoadingSpinner() {
-    const spinner = document.getElementById('loading-screen');
-    if (!spinner) return;
-    spinner.classList.add('hidden');
+/**
+ * Opens the detail overlay for a Pokémon id within the current view.
+ * @param {number} id
+ */
+function openDetail(id) {
+  state.focusIndex = state.view.findIndex((p) => p.id === id);
+  if (state.focusIndex < 0) return;
+  const container = document.getElementById('pokemon-container');
+  container.classList.add('show-overlay');
+  document.body.style.overflow = 'hidden';
+  const card = document.createElement('div');
+  card.className = 'pokemon-card focused';
+  container.appendChild(card);
+  fillFocused(state.view[state.focusIndex]);
 }
 
-document.getElementById('search').addEventListener('input', async (e) => {
-    const query = e.target.value.toLowerCase();
-    showLoadingSpinner();
-    try {
-        if (query.length < 3) {
-            renderPokemons(allPokemons);
-        } else {
-            const response = await fetch(`${apiUrl}?limit=1000&offset=0`);
-            const data = await response.json();
-            const filteredResults = data.results.filter(pokemon =>
-                pokemon.name.toLowerCase().includes(query)
-            );
-            const detailedPokemons = await Promise.all(
-                filteredResults.map(pokemon => fetchPokemonDetails(pokemon.url))
-            );
-            renderPokemons(detailedPokemons);
-        }
-    } finally {
-        hideLoadingSpinner();
-    }
-});
+/** Closes the detail overlay. */
+function closeDetail() {
+  const container = document.getElementById('pokemon-container');
+  container.classList.remove('show-overlay');
+  document.body.style.overflow = 'auto';
+  container.querySelector('.pokemon-card.focused')?.remove();
+}
 
-document.getElementById('filter').addEventListener('change', async (e) => {
-    const selectedLimit = parseInt(e.target.value, 10);
-    showLoadingSpinner();
-    try {
-        if (allPokemons.length < selectedLimit) {
-            const additionalLimit = selectedLimit - allPokemons.length;
-            await fetchAndStorePokemons(additionalLimit, currentOffset + allPokemons.length);
-        }
-        const pokemonsToRender = allPokemons.slice(0, selectedLimit);
-        renderPokemons(pokemonsToRender);
-    } finally {
-        hideLoadingSpinner();
-    }
-});
+/**
+ * Steps through the current view while the overlay is open.
+ * @param {number} direction
+ */
+function navigate(direction) {
+  const count = state.view.length;
+  state.focusIndex = (state.focusIndex + direction + count) % count;
+  fillFocused(state.view[state.focusIndex]);
+}
 
-document.getElementById('load-more').addEventListener('click', async () => {
-    if (isLoading) return;
-    isLoading = true;
-    showLoadingSpinner();
-    try {
-        const filter = document.getElementById('filter');
-        const loadMoreLimit = parseInt(filter.value, 10);
-        currentOffset += loadMoreLimit;
-        const additionalPokemons = await fetchAndStorePokemons(loadMoreLimit, currentOffset);
-        renderPokemons(allPokemons);
-    } catch (error) {
-        hideLoadingSpinner();
-    } finally {
-        hideLoadingSpinner();
-        isLoading = false;
-    }
-});
+/** Shows the loading overlay. */
+function showSpinner() {
+  document.getElementById('loading-screen').classList.remove('hidden');
+}
 
-document.addEventListener('DOMContentLoaded', loadInitialPokemons);
+/** Hides the loading overlay. */
+function hideSpinner() {
+  document.getElementById('loading-screen').classList.add('hidden');
+}
+
+/**
+ * Reads the currently selected page size.
+ * @returns {number}
+ */
+function currentLimit() {
+  return Number(document.getElementById('filter').value);
+}
+
+/** Loads and renders the first page of Pokémon. */
+async function loadInitial() {
+  showSpinner();
+  await fetchPage(currentLimit(), state.offset);
+  hideSpinner();
+  renderGrid(state.loaded.slice(0, currentLimit()));
+}
+
+/**
+ * Returns the cached name list, fetching it once on first use.
+ * @returns {Promise<Array>}
+ */
+async function getNames() {
+  if (state.names) return state.names;
+  const data = await fetchJson(`${API_URL}?limit=1000&offset=0`);
+  state.names = data?.results ?? [];
+  return state.names;
+}
+
+/**
+ * Runs a name search and renders the matches.
+ * @param {string} query
+ */
+async function runSearch(query) {
+  if (query.length < 3) {
+    renderGrid(state.loaded.slice(0, currentLimit()));
+    return;
+  }
+  showSpinner();
+  const names = await getNames();
+  const hits = names.filter((p) => p.name.includes(query)).slice(0, SEARCH_LIMIT);
+  const detailed = await Promise.all(hits.map((h) => fetchJson(h.url)));
+  hideSpinner();
+  renderGrid(detailed.filter(Boolean));
+}
+
+/** Ensures enough Pokémon are loaded, then renders the chosen amount. */
+async function applyFilter() {
+  const limit = currentLimit();
+  showSpinner();
+  if (state.loaded.length < limit) {
+    await fetchPage(limit - state.loaded.length, state.loaded.length);
+  }
+  hideSpinner();
+  renderGrid(state.loaded.slice(0, limit));
+}
+
+/** Loads the next page and appends it to the grid. */
+async function loadMore() {
+  if (state.isLoading) return;
+  state.isLoading = true;
+  showSpinner();
+  state.offset += currentLimit();
+  await fetchPage(currentLimit(), state.offset);
+  hideSpinner();
+  renderGrid(state.loaded);
+  state.isLoading = false;
+}
+
+/**
+ * Handles overlay keyboard control.
+ * @param {KeyboardEvent} event
+ */
+function onKeydown(event) {
+  if (!document.querySelector('.pokemon-card.focused')) return;
+  if (event.key === 'Escape') closeDetail();
+  if (event.key === 'ArrowLeft') navigate(-1);
+  if (event.key === 'ArrowRight') navigate(1);
+}
+
+/** Wires all controls and loads the first page. */
+function init() {
+  let timer;
+  const search = document.getElementById('search');
+  search.addEventListener('input', (e) => {
+    clearTimeout(timer);
+    const query = e.target.value.trim().toLowerCase();
+    timer = setTimeout(() => runSearch(query), SEARCH_DEBOUNCE);
+  });
+  document.getElementById('filter').addEventListener('change', applyFilter);
+  document.getElementById('load-more').addEventListener('click', loadMore);
+  document.addEventListener('keydown', onKeydown);
+  loadInitial();
+}
+
+document.addEventListener('DOMContentLoaded', init);

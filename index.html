@@ -1,43 +1,61 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokedex</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="colors.css">
-    <link rel="icon" href="./assets/icon/favicon.ico">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pokedex</title>
+  <meta name="description"
+    content="Ein Pokedex, der über die offene PokeAPI durch alle Pokémon blättert, sie durchsucht und ihre Werte anzeigt.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Pokedex">
+  <meta property="og:description" content="Blättere, suche und vergleiche Pokémon über die offene PokeAPI.">
+  <meta property="og:url" content="https://pokedex.weskakay.de/">
+  <link rel="icon" href="./assets/icon/favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="colors.css">
+  <script src="script.js" defer></script>
 </head>
+
 <body>
-    <header>
-        <a href="./index.html" id="header-container">
-            <img src="./assets/icon/pokeball_logo.png" alt="Pokedex Logo" id="logo" />
-            <h1>Pokedex</h1>
-        </a>
-        <input type="text" id="search" placeholder="Suche Pokémon..." />
-    </header>
-    
-    <main>
-        <div id="loading-screen" class="hidden">
-            <img src="./assets/icon/pokeball_logo.png" alt="Loading..." />
-            <p>Loading...</p>
-        </div>
-        <section id="pokemon-container"></section>
-        <div id="filter-container">
-            <label for="filter">Pokémon-Anzahl:</label>
-            <select id="filter">
-                <option value="10" selected>10</option>
-                <option value="20" >20</option>
-                <option value="30">30</option>
-                <option value="40">40</option>
-                <option value="50">50</option>
-            </select>
-        </div>
-        <button id="load-more">Mehr Pokemon laden</button>
-    </main>
-    <footer>
-        <p>&copy; KW - 2025 Pokedex</p>
-    </footer>
-    <script src="script.js"></script>
+  <a class="skip-link" href="#pokemon-container">Zum Inhalt springen</a>
+
+  <header>
+    <a href="./index.html" id="header-container">
+      <img src="./assets/icon/pokeball_logo.png" alt="" id="logo">
+      <h1>Pokedex</h1>
+    </a>
+    <div class="search">
+      <label class="search__label" for="search">Pokémon suchen</label>
+      <input type="search" id="search" placeholder="Suche Pokémon...">
+    </div>
+  </header>
+
+  <main>
+    <div id="loading-screen" class="hidden" aria-hidden="true">
+      <img src="./assets/icon/pokeball_logo.png" alt="">
+      <p>Lädt...</p>
+    </div>
+
+    <section id="pokemon-container" aria-live="polite"></section>
+
+    <div id="filter-container">
+      <label for="filter">Pokémon-Anzahl:</label>
+      <select id="filter">
+        <option value="10" selected>10</option>
+        <option value="20">20</option>
+        <option value="30">30</option>
+        <option value="40">40</option>
+        <option value="50">50</option>
+      </select>
+    </div>
+
+    <button id="load-more">Mehr Pokémon laden</button>
+  </main>
+
+  <footer>
+    <p>&copy; KW 2026 Pokedex</p>
+  </footer>
 </body>
+
 </html>
